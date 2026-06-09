@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/publish",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/analytics",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/token-check",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/retry-failed",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}

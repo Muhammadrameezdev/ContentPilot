@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  user
+  admin
+  owner
+}
+
+enum WorkspacePlan {
+  TRIAL
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  canceled
+  trialing
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  plan      WorkspacePlan @default(STARTER)
+  metadata  Json?    @default("{}")
+  members   WorkspaceMember[]
+  projects  Project[]
+  subscriptions Subscription[]
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted_at DateTime?
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password_hash String?
+  name         String?
+  image        String?
+  role         UserRole @default(user)
+  email_verified DateTime?
+  metadata     Json?    @default("{}")
+  memberships  WorkspaceMember[]
+  accounts     Account[]
+  sessions     Session[]
+  projects     Project[] @relation("UserProjects")
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+}
+
+model WorkspaceMember {
+  id String @id @default(uuid())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  user User @relation(fields: [userId], references: [id])
+  userId String
+  role UserRole @default(user)
+  created_at DateTime @default(now())
+  @@unique([workspaceId, userId])
+}
+
+model Account {
+  id String @id @default(uuid())
+  user User @relation(fields: [userId], references: [id])
+  userId String
+  provider String
+  providerAccountId String
+  refresh_token String?
+  access_token String?
+  expires_at BigInt?
+  token_type String?
+  scope String?
+  id_token String?
+  session_state String?
+  created_at DateTime @default(now())
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id String @id @default(uuid())
+  user User @relation(fields: [userId], references: [id])
+  userId String
+  session_token String @unique
+  expires DateTime
+  created_at DateTime @default(now())
+}
+
+model Subscription {
+  id String @id @default(uuid())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  stripe_subscription_id String?
+  status SubscriptionStatus @default(trialing)
+  plan String
+  cancel_at_period_end Boolean @default(false)
+  current_period_start DateTime?
+  current_period_end DateTime?
+  metadata Json? @default("{}")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model Project {
+  id String @id @default(uuid())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  name String
+  slug String
+  description String?
+  config Json? @default("{}")
+  created_by User? @relation("UserProjects", fields: [createdById], references: [id])
+  createdById String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted_at DateTime?
+  @@unique([workspaceId, slug])
+}
+
+model Content {
+  id String @id @default(uuid())
+  project Project @relation(fields: [projectId], references: [id])
+  projectId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  title String
+  body Json
+  status String @default("draft")
+  published_at DateTime?
+  created_by User? @relation(fields: [createdById], references: [id])
+  createdById String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted_at DateTime?
+}
+
+model ActivityLog {
+  id BigInt @id @default(autoincrement())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  user User? @relation(fields: [userId], references: [id])
+  userId String?
+  action String
+  object_type String?
+  object_id String?
+  payload Json? @default("{}")
+  created_at DateTime @default(now())
+}
+
+model Notification {
+  id String @id @default(uuid())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  user User? @relation(fields: [userId], references: [id])
+  userId String?
+  type String
+  data Json? @default("{}")
+  read_at DateTime?
+  created_at DateTime @default(now())
+}
+
+model ApiKey {
+  id String @id @default(uuid())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  name String
+  key_hash String
+  enabled Boolean @default(true)
+  metadata Json? @default("{}")
+  created_at DateTime @default(now())
+}
+
+model ApiUsage {
+  id BigInt @id @default(autoincrement())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  apiKey ApiKey? @relation(fields: [apiKeyId], references: [id])
+  apiKeyId String?
+  endpoint String
+  method String
+  cost Decimal @default(0)
+  response_status Int?
+  meta Json? @default("{}")
+  created_at DateTime @default(now())
+}
+
+model AuditLog {
+  id BigInt @id @default(autoincrement())
+  table_name String
+  record_id String?
+  operation String
+  changed_by String?
+  changes Json? @default("{}")
+  created_at DateTime @default(now())
+}

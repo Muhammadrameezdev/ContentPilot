@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  memberships   WorkspaceMember[]
+  notifications Notification[]
+  content       Content[]
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Workspace {
+  id                    String            @id @default(cuid())
+  name                  String
+  slug                  String            @unique
+  logo                  String?
+  plan                  PlanType          @default(STARTER)
+  stripeCustomerId      String?
+  stripeSubscriptionId  String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  members               WorkspaceMember[]
+  pages                 FacebookPage[]
+  content               Content[]
+
+  @@index([slug])
+}
+
+model WorkspaceMember {
+  id          String     @id @default(cuid())
+  role        MemberRole @default(VIEWER)
+  status      String     @default("ACTIVE")
+  userId      String
+  workspaceId String
+  joinedAt    DateTime   @default(now())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+model FacebookPage {
+  id             String          @id @default(cuid())
+  facebookPageId String          @unique
+  name           String
+  category       String?
+  followers      Int             @default(0)
+  profileImage   String?
+  coverImage     String?
+  accessToken    String
+  tokenExpiresAt DateTime?
+  isActive       Boolean         @default(true)
+  workspaceId    String
+  connectedAt    DateTime        @default(now())
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posts          ScheduledPost[]
+  analytics      PageAnalytics[]
+
+  @@index([workspaceId])
+  @@index([facebookPageId])
+}
+
+model Content {
+  id          String        @id @default(cuid())
+  type        ContentType
+  text        String
+  mediaUrl    String?
+  linkUrl     String?
+  tags        String[]
+  category    String?
+  status      ContentStatus @default(DRAFT)
+  workspaceId String
+  authorId    String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  posts       ScheduledPost[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([authorId])
+}
+
+model ScheduledPost {
+  id             String         @id @default(cuid())
+  contentId      String
+  pageId         String
+  scheduledAt    DateTime
+  publishedAt    DateTime?
+  status         PostStatus     @default(DRAFT)
+  facebookPostId String?
+  errorMessage   String?
+  retryCount     Int            @default(0)
+  priority       Int            @default(0)
+  isRecurring    Boolean        @default(false)
+  recurrenceRule String?
+  scheduledBy    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  content        Content        @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  page           FacebookPage   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([pageId])
+}
+
+model PageAnalytics {
+  id          String   @id @default(cuid())
+  pageId      String
+  date        DateTime
+  reach       Int      @default(0)
+  impressions Int      @default(0)
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  shares      Int      @default(0)
+  clicks      Int      @default(0)
+  page        FacebookPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, date])
+  @@index([pageId])
+  @@index([date])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  type        NotificationType
+  title       String
+  message     String
+  isRead      Boolean          @default(false)
+  userId      String
+  createdAt   DateTime         @default(now())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model Media {
+  id          String    @id @default(cuid())
+  url         String
+  type        MediaType
+  size        Int
+  filename    String
+  workspaceId String
+  uploadedBy  String
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum PlanType {
+  STARTER
+  PRO
+  AGENCY
+}
+
+enum ContentType {
+  TEXT
+  IMAGE
+  VIDEO
+  REEL
+  LINK
+}
+
+enum ContentStatus {
+  DRAFT
+  ARCHIVED
+  TEMPLATE
+}
+
+enum PostStatus {
+  DRAFT
+  QUEUED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationType {
+  POST_PUBLISHED
+  POST_FAILED
+  TOKEN_EXPIRING
+  TOKEN_EXPIRED
+  TEAM_ACTIVITY
+  QUEUE_ERROR
+  WEEKLY_REPORT
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
