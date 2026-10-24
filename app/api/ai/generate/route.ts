@@ -1,38 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import {
-  generatePosts,
-  generateCaptions,
-  generateHashtags,
-  rewritePost,
-  generateCTA,
-  generateCalendarPlan,
-} from "@/lib/openai";
+import { streamGroqText, type AiTextFeature } from "@/lib/ai/groq";
+import { generateImage } from "@/lib/ai/gemini";
 
-const schema = z.object({
-  tool: z.enum(["posts", "captions", "hashtags", "rewriter", "cta", "calendar"]),
-  industry: z.string().optional(),
-  audience: z.string().optional(),
-  tone: z.string().optional(),
-  topic: z.string().optional(),
-  count: z.number().min(1).max(10).optional(),
-  text: z.string().optional(),
-  days: z.number().optional(),
+// Single AI router: text streaming (Groq) and image generation (Google Gen AI)
+// are both served from this one file, selected by the request payload `mode`.
+export const runtime = "nodejs";
+
+const textSchema = z.object({
+  mode: z.literal("text").optional().default("text"),
+  feature: z.enum([
+    "posts",
+    "captions",
+    "hashtags",
+    "rewriter",
+    "cta",
+    "calendar",
+    "chat",
+  ]),
+  input: z.string().min(2).max(4000),
 });
 
-// Rate limiting (simple in-memory)
+const imageSchema = z.object({
+  mode: z.literal("image"),
+  prompt: z.string().min(2).max(2000),
+});
+
+const schema = z.union([imageSchema, textSchema]);
+
+// Simple in-memory, per-user rate limit (serverless-safe per instance).
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(userId: string): boolean {
   const now = Date.now();
-  const limit = rateLimitMap.get(userId);
-  if (!limit || now > limit.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + 60000 });
+  const entry = rateLimitMap.get(userId);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 });
     return true;
   }
-  if (limit.count >= 10) return false;
-  limit.count++;
+  if (entry.count >= 20) return false;
+  entry.count++;
   return true;
 }
 
@@ -44,64 +52,49 @@ export async function POST(req: NextRequest) {
     }
 
     if (!checkRateLimit(session.user.id)) {
-      return NextResponse.json({ message: "Rate limit exceeded. Try again in a minute." }, { status: 429 });
+      return NextResponse.json(
+        { message: "Rate limit exceeded. Try again in a minute." },
+        { status: 429 }
+      );
     }
 
-    const body = await req.json();
-    const data = schema.parse(body);
+    const parsed = schema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { message: "Invalid input", errors: parsed.error.issues },
+        { status: 400 }
+      );
+    }
 
-    let result: unknown;
+    // Image branch — Google Gen AI returns a single image as a data URL.
+    if (parsed.data.mode === "image") {
+      const { dataUrl, mimeType } = await generateImage(parsed.data.prompt);
+      return NextResponse.json({ image: dataUrl, mimeType });
+    }
 
-    switch (data.tool) {
-      case "posts":
-        result = await generatePosts(
-          data.industry ?? "General",
-          data.audience ?? "General audience",
-          data.tone ?? "Professional",
-          data.count ?? 3
-        );
-        break;
-      case "captions":
-        result = await generateCaptions(
-          data.topic ?? "",
-          data.tone ?? "Professional",
-          data.count ?? 5
-        );
-        break;
-      case "hashtags":
-        result = await generateHashtags(
-          data.topic ?? "",
-          data.industry ?? "General",
-          data.count ?? 20
-        );
-        break;
-      case "rewriter":
-        if (!data.text) {
-          return NextResponse.json({ message: "Text is required for rewriter" }, { status: 400 });
+    // Text branch — stream Groq tokens back to the client as they arrive.
+    const { feature, input } = parsed.data;
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const delta of streamGroqText(feature as AiTextFeature, input)) {
+            controller.enqueue(encoder.encode(delta));
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
         }
-        result = await rewritePost(data.text, data.tone ?? "Professional");
-        break;
-      case "cta":
-        result = await generateCTA(
-          data.topic ?? "",
-          data.audience ?? "General",
-          data.count ?? 5
-        );
-        break;
-      case "calendar":
-        result = await generateCalendarPlan(
-          data.industry ?? "General",
-          data.audience ?? "General audience",
-          data.days ?? 7
-        );
-        break;
-    }
+      },
+    });
 
-    return NextResponse.json({ result });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+      },
+    });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ message: "Invalid input", errors: error.issues }, { status: 400 });
-    }
     console.error("AI generate error:", error);
     return NextResponse.json({ message: "AI generation failed" }, { status: 500 });
   }
