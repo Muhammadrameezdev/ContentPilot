@@ -30,8 +30,8 @@ AI-powered Facebook content management SaaS platform. Create, schedule, and auto
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/your-org/contentpilot.git
-cd fb-content-hub
+git clone https://github.com/muhammadrameez14437-ux/ContentPilot.git
+cd ContentPilot
 npm install
 ```
 
@@ -67,6 +67,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### 5. Demo Accounts
 
+> These demo accounts are for local development only. Change the seeded passwords before any public deployment.
+
 | Email | Password | Role |
 |---|---|---|
 | admin@contentpilot.com | admin123456 | Admin |
@@ -74,7 +76,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-org/fb-content-hub)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/muhammadrameez14437-ux/ContentPilot)
 
 1. Connect your GitHub repo
 2. Add all environment variables from `.env.example`
