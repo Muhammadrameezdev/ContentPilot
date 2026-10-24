@@ -30,7 +30,7 @@ AI-powered Facebook content management SaaS platform. Create, schedule, and auto
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/muhammadrameez14437-ux/ContentPilot.git
+git clone https://github.com/Muhammadrameezdev/ContentPilot.git
 cd ContentPilot
 npm install
 ```
@@ -76,7 +76,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/muhammadrameez14437-ux/ContentPilot)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Muhammadrameezdev/ContentPilot)
 
 1. Connect your GitHub repo
 2. Add all environment variables from `.env.example`
